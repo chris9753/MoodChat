@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>MoodChat</title>
+	<link rel="stylesheet" href="../css/room.css">
+	<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+	<script src="https://cdn.socket.io/socket.io-1.3.4.js"></script>
+	<script>
+	$(function(){
+		var typingTimer;                //timer identifier
+		var doneTypingInterval = 10000;  //time in ms, 5 second for example
+
+		var host = '{{config.host}}',
+			messages = io.connect(host + '/messages'),
+			roomNum = {{room_number}},
+			userName = '{{user.fullname}}',
+			userPic = '{{user.profilePic}}';
+			messages.on('connect',function(){
+				console.log("Connection established! asds");
+				messages.emit('joinroom',{room:roomNum, user:userName, userPic:userPic});
+			})
+			$(document).on('keyup','.newmessage',function(e){
+				var delay = (function(){
+			  var timer = 0;
+			  return function(callback, ms){
+			  clearTimeout (timer);
+			  timer = setTimeout(callback, ms);
+			 };
+			})();
+				if(e.which === 13 && $(this).val()!=''){
+					eventEmit('newMessage');
+					updateUserMessageFeed(userPic, $(this).val());
+					$(this).val('');
+				}
+				eventEmit('userIsTyping');
+				 delay(function(){
+				    eventEmit('userIsDoneTyping');
+				  }, 3000 );
+			});
+
+
+			function eventEmit(typeOfEvent){
+				if(typeOfEvent === 'newMessage'){
+				messages.emit(typeOfEvent,{
+						room_number:roomNum,
+						user:userName,
+						userPic:userPic,
+						message:$('.newmessage').val()
+					})
+				}
+				if(typeOfEvent === 'userIsTyping'){
+					messages.emit(typeOfEvent,{
+						room_number:roomNum,
+						user:userName
+					})
+
+				}
+					if(typeOfEvent === 'userIsDoneTyping'){
+					messages.emit(typeOfEvent,{
+						room_number:roomNum,
+						user:userName
+					})
+
+				}
+			}
+			//Incoming Events from OTHER users//////////
+			messages.on('messagefeed',function(data){
+					var msgs = JSON.parse(data);
+					updateIncomingMessageFeed(msgs.userPic, msgs.message,msgs.sentiment);
+					console.log(msgs.sentiment);
+			
+				})
+			messages.on('userTyped',function(data){
+				var parsedData = JSON.parse(data);
+				userIsTyping(parsedData.user);
+
+			})
+			messages.on('userStoppedTyping',function(data){
+				var parsedData = JSON.parse(data);
+				userStoppedTyping(parsedData.user);
+			})
+				///////////////////////////////////
+
+		//Ui updates for current user/////////////////		
+	function updateUserMessageFeed(userPic,message){
+		var str = '<li>';
+			str +=	'<div class="msgbox">';
+			str +=	'<div class="pic"><img src="' + userPic +'"></div>';
+			str +=	'<div class="msg"><p>'+ message + ' </p></div>';
+			str +=	'</div>';
+			str +=	'</li>' ;
+			$(str).hide().appendTo($('.messages')).slideDown(100);
+			
+		}
+
+		//Ui updates for incoming user
+		function updateIncomingMessageFeed(userPic,message,sentiment){
+			var color = sentimentColorChange(sentiment);
+			console.log(color);
+			var str = '<li>';
+			str +=	'<div class="msgbox">';
+			str +=	'<div class="pic"><img src="' + userPic +'"></div>';
+			str +=	'<div class="msg"><p style="color:'+color+'">'+ message + ' </p></div>';
+			str +=	'</div>';
+			str +=	'</li>' ;
+			$(str).hide().appendTo($('.messages')).slideDown(100);
+		}
+
+		function userIsTyping(nameOfUser){
+			console.log(nameOfUser + " is typing.");
+
+		}
+
+		function userStoppedTyping(nameOfUser){
+			console.log(nameOfUser + " stopped typing.")
+		}
+
+		///Incoming ui Logic
+	function sentimentColorChange(sentiment){
+		console.log(sentiment);
+		switch (true) {
+			case (sentiment === 0):
+			return '#0080FF';
+			break;
+			case  (sentiment <= 3 && sentiment > 0):
+			return 'green';
+			break;
+			case ( sentiment<0):
+			console.log("YO YO YO")
+			return 'black';
+			break;
+			default:
+			break;
+		}
+
+	}
+
+		messages.on('updateUserList',function(data){
+			var userlist = JSON.parse(data);
+			$('.users').html('');
+			for(var i = 0; i < userlist.length;i++){
+				var str = '<li><img src="'+ userlist[i].userPic+'"><h5>'+userlist[i].user + '</h5></li>';
+				$(str).prependTo($('.users'));
+			}
+		})
+
+		setInterval(function(){
+			messages.emit('updateList',{room:roomNum});
+		},15000);
+	})
+	</script>
+</head>
+<body>
+<div class="rm-container">
+		<h1 class="rm-title">MoodChat</h1>
+		<div class="rm-userbox">
+			<img src="{{user.profilePic}}" class="userPic">
+			<h3 class="userName">{{user.fullname}} | <a href="/logout">Logout</a><a href="/chatrooms">More Chatrooms</a></h3>
+		</div>
+		<div class="rm-roomname">
+			<h5>{{room_name}}</h5>
+		</div>
+		<div class="rm-messages">
+			<ul class="messages">
+				
+			</ul>
+		</div>
+		<div class="rm-users">
+			<ul class="users">
+				
+			</ul>
+		</div>
+		<div class="rm-newmessage">
+			<input type="text" class="newmessage" autocomplete="off" placeholder="Type in your message and press enter !">
+			
+		</div>
+	</div>
+</body>
+</html>
